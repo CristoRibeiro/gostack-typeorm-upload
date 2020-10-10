@@ -21,12 +21,6 @@ class CreateTransactionService {
     const categoryRepository = getRepository(Category);
     const transactionsRepository = getCustomRepository(TransactionsRepository);
 
-    let existingCategory = await categoryRepository.findOne({
-      title: category,
-    });
-    if (!existingCategory) {
-      existingCategory = await new CreateCategoryService().execute(category);
-    }
     if (!['income', 'outcome'].includes(type)) {
       throw new AppError('Type is invalid!');
     }
@@ -36,6 +30,12 @@ class CreateTransactionService {
       if (total - value < 0) {
         throw new AppError('Founds insufficient');
       }
+    }
+    let existingCategory = await categoryRepository.findOne({
+      title: category,
+    });
+    if (!existingCategory) {
+      existingCategory = await new CreateCategoryService().execute(category);
     }
 
     const transaction = transactionsRepository.create({
