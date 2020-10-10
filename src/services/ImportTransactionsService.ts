@@ -5,6 +5,7 @@ import { getCustomRepository, getRepository, In } from 'typeorm';
 import Transaction from '../models/Transaction';
 import TransactionsRepository from '../repositories/TransactionsRepository';
 import Category from '../models/Category';
+import ImporFileCsv from '../config/ImportFileCsv';
 
 interface CsvTransaction {
   title: string;
@@ -14,29 +15,27 @@ interface CsvTransaction {
 }
 class ImportTransactionsService {
   async execute(filename: string): Promise<Transaction[]> {
-    const csvFilePath = patch.resolve(filename);
-    const readCSVStream = fs.createReadStream(csvFilePath);
+    const registrosCsv = await ImporFileCsv.getRegistrosCsv(filename, false);
 
     const transactionsCsv: CsvTransaction[] = [];
-    const categoriesCsv: string[] = [];
 
-    const parseStream = csvParse({
-      from_line: 2,
-      ltrim: true,
-      rtrim: true,
+    registrosCsv.forEach(element => {
+      const [title, type, value, category] = element;
+
+      if (!title || !type || !value) return;
+
+      transactionsCsv.push({
+        title,
+        type: type as 'income' | 'outcome',
+        value: Number(value),
+        category,
+      });
     });
 
-    const parseCSV = readCSVStream.pipe(parseStream);
+    const categoriesCsv = [
+      ...transactionsCsv.map(elemento => elemento.category),
+    ];
 
-    parseCSV.on('data', line => {
-      const [title, type, value, category] = line;
-
-      transactionsCsv.push({ title, type, value, category });
-      categoriesCsv.push(category);
-    });
-    await new Promise(resolve => {
-      parseCSV.on('end', resolve);
-    });
     const repositoryCategory = getRepository(Category);
 
     const existentsCategories = await repositoryCategory.find({
@@ -46,7 +45,9 @@ class ImportTransactionsService {
     const categoriesNotExists = categoriesCsv
       .filter(
         element =>
-          !existentsCategories.map(exCat => exCat.title).includes(element),
+          !existentsCategories
+            .map(category => category.title)
+            .includes(element),
       )
       .filter((element, index, self) => self.indexOf(element) === index);
 
@@ -72,10 +73,6 @@ class ImportTransactionsService {
     );
 
     await transactionsRepository.save(transactions);
-
-    fs.unlink(filename, err => {
-      if (err) throw err;
-    });
     return transactions;
   }
 }

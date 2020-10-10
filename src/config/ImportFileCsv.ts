@@ -7,6 +7,29 @@ export default class ImporFileCsv {
     patchFile: string,
     isReadHeader: boolean,
   ): Promise<Array<Array<string>>> {
+    const csvFilePath = path.resolve(patchFile);
+    const readCSVStream = fs.createReadStream(csvFilePath);
+
+    const parseStream = csvParse({
+      from_line: isReadHeader ? 1 : 2,
+      ltrim: true,
+      rtrim: true,
+    });
+
+    const parseCSV = readCSVStream.pipe(parseStream);
+
+    const lines: Array<Array<string>> = [];
+
+    parseCSV.on('data', line => {
+      lines.push(line);
+    });
+    await new Promise(resolve => {
+      parseCSV.on('end', resolve);
+    });
+
+    fs.unlink(patchFile, err => {
+      if (err) throw err;
+    });
     return lines;
   }
 }
